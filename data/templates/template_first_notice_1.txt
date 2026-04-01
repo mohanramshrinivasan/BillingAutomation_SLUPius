@@ -1,0 +1,29 @@
+Dear {Preferred_Name},
+
+The following item(s) on your Pius XII Memorial Library account are now billed:
+
+{Title} - ${Fines}
+
+TOTAL: ${Fines}
+
+This notice is to inform you that the item(s) have exceeded the overdue period. Please take action at your earliest convenience.
+
+What you can do:
+
+1. Return the item(s) to any SLU library location
+2. If lost, pay the replacement fee
+3. Contact us if you need assistance
+
+Online Payment Steps:
+- Go to SLU Marketplace
+- Select "Library Web Store"
+- Choose "Replacement/Damaged Fee (Pius)"
+- Enter ${Fines} and complete payment
+
+If returned in good condition, the charges will be removed.
+
+If you have any questions, please contact us at 314-977-3087 or reply to this email.
+
+Best regards,
+Billing Coordinator
+Pius XII Memorial Library

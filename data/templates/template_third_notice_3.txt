@@ -1,0 +1,24 @@
+Dear {Preferred_Name},
+
+This is your third notice regarding billed material(s) on your Pius XII Memorial Library account:
+
+{Title} - ${Fines}
+
+TOTAL: ${Fines}
+
+Immediate action is required.
+
+Failure to resolve this matter may result in additional administrative actions, including restrictions on your library privileges.
+
+To resolve:
+
+- Return the item(s) immediately
+- Or pay the replacement fee
+
+Please address this matter as soon as possible.
+
+For assistance, contact 314-977-3087 or reply to this email.
+
+Best regards,
+Billing Coordinator
+Pius XII Memorial Library

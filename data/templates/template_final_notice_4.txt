@@ -1,0 +1,35 @@
+Dear {Preferred_Name},
+
+The following item(s) on your Pius XII Memorial Library account remain unresolved:
+
+{Title} - ${Fines}
+
+TOTAL: ${Fines}
+
+Due to extended overdue status, a transcript hold has been placed on your account and will remain until this matter is resolved.
+
+Item Details:
+Title/Author: {Title}
+Call Number: {Call_Number}
+Barcode: {Barcode}
+Replacement Cost: ${Fines}
+
+To resolve this hold:
+
+- Return the item(s) in good condition
+- Or pay the replacement fee
+
+Payment Options:
+- SLU Marketplace -> Library Web Store -> Replacement/Damaged Fee (Pius)
+- In person at Pius Library Circulation Desk
+
+Important:
+Your account access remains restricted until the issue is resolved.
+
+Once the item is returned or payment is verified, the hold will be removed.
+
+For assistance, contact 314-977-3087 or reply to this email.
+
+Best regards,
+Billing Coordinator
+Pius XII Memorial Library

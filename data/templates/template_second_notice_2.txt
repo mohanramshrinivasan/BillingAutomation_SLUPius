@@ -1,0 +1,22 @@
+Dear {Preferred_Name},
+
+This is a reminder regarding the billed item(s) on your Pius XII Memorial Library account:
+
+{Title} - ${Fines}
+
+TOTAL: ${Fines}
+
+Our records indicate that the item(s) are still outstanding. Prompt action is required to avoid further restrictions.
+
+Please do one of the following:
+
+- Return the item(s) immediately
+- Pay the replacement fee if the item is lost
+
+If returned in acceptable condition, charges will be cleared.
+
+If you need assistance, contact us at 314-977-3087 or reply to this email.
+
+Best regards,
+Billing Coordinator
+Pius XII Memorial Library

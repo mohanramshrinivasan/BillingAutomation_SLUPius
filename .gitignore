@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+
+# Logs & outputs
+logs/
+output/
+
+# macOS
+.DS_Store
+
+# Excel temp files
+~$*.xlsx
