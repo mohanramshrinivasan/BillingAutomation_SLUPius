@@ -1,13 +1,31 @@
+# ==========================================================
+# BILLING AUTOMATION SCRIPT
+# ==========================================================
+# What this script does:
+# 1. Reads config values from JSON
+# 2. Reads patron/item data from Excel
+# 3. Groups multiple rows for the same email into one email
+# 4. Chooses the correct invoice stage (1, 2, 3, or final)
+# 5. Builds one combined Outlook draft per person
+# 6. Marks the Outlook draft as High Importance
+# 7. Updates the correct invoice date in Excel
+# 8. Changes Run from Yes to Done
+# 9. Writes logs to a log file
+# ==========================================================
+
 import sys
 import json
 import re
 from datetime import datetime
-from email.message import EmailMessage
 from pathlib import Path
 
 import pandas as pd
 
 
+# ----------------------------------------------------------
+# Tee class
+# Purpose: write terminal output to both screen and log file
+# ----------------------------------------------------------
 class Tee:
     def __init__(self, file_obj):
         self.file_obj = file_obj
@@ -22,18 +40,23 @@ class Tee:
         self.file_obj.flush()
 
 
+# ----------------------------------------------------------
+# Project folder paths
+# ----------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 TEMPLATES_DIR = DATA_DIR / "templates"
 INPUT_DIR = DATA_DIR / "input"
 EXCEL_DIR = DATA_DIR / "excel"
-OUTPUT_DIR = BASE_DIR / "output"
 LOGS_DIR = BASE_DIR / "logs"
 
 CONFIG_FILE = INPUT_DIR / "input_data.json"
 EXCEL_FILE = EXCEL_DIR / "billing_data.xlsx"
 
 
+# ----------------------------------------------------------
+# Helper functions
+# ----------------------------------------------------------
 def timestamp() -> str:
     return datetime.now().strftime("%m%d%y-%H%M%S")
 
@@ -83,10 +106,20 @@ def format_money(value) -> str:
         return "0.00"
 
 
+def money_float(value) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return 0.0
+
+
 def safe_filename(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", str(text)).strip("_")
 
 
+# ----------------------------------------------------------
+# Determine invoice stage for one row
+# ----------------------------------------------------------
 def get_stage(row: pd.Series, config: dict) -> int:
     d1 = row.get(config["invoice_date_1_column"])
     d2 = row.get(config["invoice_date_2_column"])
@@ -116,20 +149,100 @@ def get_stage_column(stage: int, config: dict) -> str:
     return ""
 
 
-def build_context(row: pd.Series, config: dict) -> dict:
+# ----------------------------------------------------------
+# Build grouped email content for one person/email
+# ----------------------------------------------------------
+def build_group_context(group_df: pd.DataFrame, config: dict) -> dict:
+    first_row = group_df.iloc[0]
+
+    item_lines_list = []
+    item_details_list = []
+    total_fines = 0.0
+
+    for _, row in group_df.iterrows():
+        title = clean_text(row.get(config["title_column"], ""))
+        barcode = clean_text(row.get(config["barcode_column"], ""))
+        call_number = clean_text(row.get(config["call_number_column"], ""))
+        fines_value = money_float(row.get(config["fines_column"], 0))
+
+        total_fines += fines_value
+
+        item_lines_list.append(f"{title} - ${format_money(fines_value)}")
+
+        item_details_list.append(
+            f"Title/Author: {title}\n"
+            f"Call Number: {call_number}\n"
+            f"Barcode: {barcode}\n"
+            f"Replacement Cost: ${format_money(fines_value)}"
+        )
+
+    item_lines = "\n".join(item_lines_list)
+    item_details = "\n\n".join(item_details_list)
+
     return {
-        "Preferred_Name": format_name(row.get(config["name_column"], "")),
-        "Title": clean_text(row.get(config["title_column"], "")),
-        "Barcode": clean_text(row.get(config["barcode_column"], "")),
-        "Call_Number": clean_text(row.get(config["call_number_column"], "")),
-        "Fines": format_money(row.get(config["fines_column"], 0)),
+        "Preferred_Name": format_name(first_row.get(config["name_column"], "")),
+        "Title": clean_text(first_row.get(config["title_column"], "")),
+        "Barcode": clean_text(first_row.get(config["barcode_column"], "")),
+        "Call_Number": clean_text(first_row.get(config["call_number_column"], "")),
+        "Fines": format_money(first_row.get(config["fines_column"], 0)),
+        "Item_Lines": item_lines,
+        "Item_Details": item_details,
+        "Total_Fines": format_money(total_fines),
         "From_Email": clean_text(config.get("from_email", "")),
         "Today": run_date(),
     }
 
 
+# ----------------------------------------------------------
+# Prepare Outlook draft on Windows
+# This creates the draft, marks it High Importance,
+# saves it in Drafts, and opens it for review
+# ----------------------------------------------------------
+def outlook_prepare_windows(to_email: str, subject: str, body: str, from_email: str = "") -> str:
+    import win32com.client  # type: ignore
+
+    outlook = win32com.client.Dispatch("Outlook.Application")
+    mail = outlook.CreateItem(0)
+
+    mail.To = to_email
+    mail.Subject = subject
+    mail.Body = body
+
+    # Mark draft as High Importance
+    # Outlook values:
+    # 0 = Low
+    # 1 = Normal
+    # 2 = High
+    mail.Importance = 2
+
+    # Try to use the configured sending account
+    if from_email:
+        session = outlook.Session
+        for account in session.Accounts:
+            try:
+                if str(account.SmtpAddress).lower() == from_email.lower():
+                    mail.SendUsingAccount = account
+                    break
+            except Exception:
+                pass
+
+        # Useful for shared mailbox / on behalf of scenarios
+        try:
+            mail.SentOnBehalfOfName = from_email
+        except Exception:
+            pass
+
+    # Save to Outlook Drafts and open for manual review
+    mail.Save()
+    mail.Display()
+
+    return "Outlook draft prepared, displayed, and marked High Importance"
+
+
+# ----------------------------------------------------------
+# Main script
+# ----------------------------------------------------------
 def main():
-    ensure_dir(OUTPUT_DIR)
     ensure_dir(LOGS_DIR)
 
     if not CONFIG_FILE.exists():
@@ -177,84 +290,109 @@ def main():
         df = pd.read_excel(EXCEL_FILE, sheet_name=config["sheet_name"])
         df.columns = df.columns.str.strip()
 
+        # Make invoice date columns text-safe
+        date_columns = [
+            config["invoice_date_1_column"],
+            config["invoice_date_2_column"],
+            config["invoice_date_3_column"],
+            config["invoice_date_4_column"],
+        ]
+
+        for col in date_columns:
+            if col in df.columns:
+                df[col] = df[col].astype("string")
+
         if len(df.columns) < 2:
             raise ValueError("Excel must have at least 2 columns. Column 2 should be Run.")
 
         run_column = df.columns[1]
+        df[run_column] = df[run_column].astype("string")
 
-        draft_count = 0
+        processed_count = 0
         skip_count = 0
         today_value = run_date()
 
-        for idx, row in df.iterrows():
-            row_number = idx + 2
-            run_value = clean_text(row.get(run_column, ""))
+        # Keep only rows where Run = Yes
+        eligible_df = df[df[run_column].fillna("").astype(str).str.strip().str.lower() == "yes"].copy()
 
-            if run_value.lower() != "yes":
-                print(f"Row {row_number}: skipped because Run is not Yes.")
-                skip_count += 1
+        # Group rows by recipient email
+        grouped = eligible_df.groupby(config["to_column"], dropna=False)
+
+        for to_email, group_df in grouped:
+            to_email = clean_text(to_email)
+
+            if not to_email:
+                print("Skipped one group because TO email is blank.")
+                skip_count += len(group_df)
                 continue
 
-            stage = get_stage(row, config)
+            # Check all invoice stages inside the group
+            stages = group_df.apply(lambda row: get_stage(row, config), axis=1).tolist()
+            unique_stages = set(stages)
 
-            if stage == 0:
+            if unique_stages == {0}:
                 print(
-                    f"Row {row_number}: Cannot draft email since all invoice date fields are already filled. "
+                    f"Email {to_email}: Cannot draft email since all invoice date fields are already filled. "
                     f"Please check the invoice dates."
                 )
-                skip_count += 1
+                skip_count += len(group_df)
                 continue
 
-            to_email = clean_text(row.get(config["to_column"], ""))
-            if not to_email:
-                print(f"Row {row_number}: skipped because TO email is blank.")
-                skip_count += 1
+            # For safety, all grouped rows must be in the same stage
+            valid_stages = {s for s in unique_stages if s != 0}
+            if len(valid_stages) != 1:
+                print(
+                    f"Email {to_email}: skipped because rows have mixed invoice stages {sorted(unique_stages)}. "
+                    f"Please clean Excel data."
+                )
+                skip_count += len(group_df)
                 continue
 
+            stage = valid_stages.pop()
             template_info = template_map[stage]
-            context = build_context(row, config)
+            subject = template_info["subject"]
+            from_email = clean_text(config.get("from_email", ""))
+
+            # Build grouped email text
+            context = build_group_context(group_df, config)
 
             try:
                 body = template_info["body"].format(**context)
             except KeyError as e:
-                print(f"Row {row_number}: template placeholder missing: {e}")
-                skip_count += 1
+                print(f"Email {to_email}: template placeholder missing: {e}")
+                skip_count += len(group_df)
                 continue
 
-            subject = template_info["subject"]
-
-            msg = EmailMessage()
-            msg["From"] = clean_text(config["from_email"])
-            msg["To"] = to_email
-
-            reply_to = clean_text(config.get("reply_to", ""))
-            if reply_to:
-                msg["Reply-To"] = reply_to
-
-            msg["Subject"] = subject
-            msg.set_content(body)
-
-            person_name = context["Preferred_Name"] or "Unknown"
-            email_stamp = timestamp()
-            file_name = f"{safe_filename(person_name)}-{email_stamp}.eml"
-            output_file = OUTPUT_DIR / file_name
-
-            with open(output_file, "wb") as f:
-                f.write(bytes(msg))
+            try:
+                action_result = outlook_prepare_windows(
+                    to_email=to_email,
+                    subject=subject,
+                    body=body,
+                    from_email=from_email
+                )
+            except Exception as e:
+                print(f"Email {to_email}: Outlook draft preparation failed: {e}")
+                skip_count += len(group_df)
+                continue
 
             stage_column = get_stage_column(stage, config)
-            if stage_column:
-                df.at[idx, stage_column] = today_value
 
-            df.at[idx, run_column] = "Done"
+            # Update all rows in this group
+            for idx in group_df.index:
+                if stage_column:
+                    df.at[idx, stage_column] = today_value
+                df.at[idx, run_column] = "Done"
 
-            draft_count += 1
+            processed_count += len(group_df)
+
             print(
-                f"Row {row_number}: draft created -> {output_file.name} | "
+                f"Email {to_email}: {action_result} | "
                 f"stage={stage} | updated {stage_column} to {today_value} | "
-                f"updated {run_column} to Done | to={to_email}"
+                f"updated {run_column} to Done | rows combined={len(group_df)} | "
+                f"total=${context['Total_Fines']}"
             )
 
+        # Save updated Excel data back
         with pd.ExcelWriter(
             EXCEL_FILE,
             engine="openpyxl",
@@ -263,8 +401,7 @@ def main():
         ) as writer:
             df.to_excel(writer, sheet_name=config["sheet_name"], index=False)
 
-        print(f"Run completed. Drafts created: {draft_count}. Rows skipped: {skip_count}.")
-        print(f"Output directory: {OUTPUT_DIR}")
+        print(f"Run completed. Processed rows: {processed_count}. Rows skipped: {skip_count}.")
         print(f"Log file: {log_file}")
 
     finally:
@@ -273,5 +410,8 @@ def main():
         log_f.close()
 
 
+# ----------------------------------------------------------
+# Script start point
+# ----------------------------------------------------------
 if __name__ == "__main__":
     main()

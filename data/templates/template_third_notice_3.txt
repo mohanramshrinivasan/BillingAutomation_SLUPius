@@ -2,9 +2,9 @@ Dear {Preferred_Name},
 
 This is your third notice regarding billed material(s) on your Pius XII Memorial Library account:
 
-{Title} - ${Fines}
+{Item_Lines}
 
-TOTAL: ${Fines}
+TOTAL: ${Total_Fines}
 
 Immediate action is required.
 
@@ -13,7 +13,7 @@ Failure to resolve this matter may result in additional administrative actions, 
 To resolve:
 
 - Return the item(s) immediately
-- Or pay the replacement fee
+- Or pay the replacement fee thru (https://billpay.slu.edu/C20197_ustores/web/store_main.jsp?STOREID=46&SINGLESTORE=true)
 
 Please address this matter as soon as possible.
 
