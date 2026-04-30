@@ -1,25 +1,36 @@
+
+Paste:
+
+```bat
 @echo off
+title Billing Automation
+
+echo ===============================
+echo Running Billing Automation...
+echo ===============================
+
 cd /d "%~dp0"
 
-title Billing Automation Tool
+echo Checking Python...
 
-echo Running Billing Automation...
-echo --------------------------------
+python --version
 
-if exist "C:\Users\mshrinivasan\AppData\Local\Programs\Python\Python313\python.exe" (
-    "C:\Users\mshrinivasan\AppData\Local\Programs\Python\Python313\python.exe" billing_prepare.py
+if errorlevel 1 (
+    echo Trying py command...
+    py --version
+
+    if errorlevel 1 (
+        echo ERROR: Python not found
+        echo Please reinstall Python and CHECK "Add Python to PATH"
+        pause
+        exit /b
+    )
+
+    py billing_automation.py
 ) else (
-    py billing_prepare.py
-)
-
-if %errorlevel% neq 0 (
-    echo.
-    echo Billing Automation failed.
-    pause
-    exit /b %errorlevel%
+    python billing_automation.py
 )
 
 echo.
-echo --------------------------------
-echo Billing Automation completed successfully.
+echo DONE - Check Outlook Drafts
 pause
